@@ -22,7 +22,7 @@ if (!$order || (int)$order['id_user'] !== $id_user) {
     exit();
 }
 
-$items = mysqli_query($conn, "SELECT d.*, m.nama_menu, m.harga FROM detail_pesanan d JOIN menu m ON d.id_menu = m.id_menu WHERE d.id_pesanan = " . (int)$id_pesanan);
+$items = mysqli_query($conn, "SELECT d.*, m.nama_menu, m.harga, m.deskripsi FROM detail_pesanan d JOIN menu m ON d.id_menu = m.id_menu WHERE d.id_pesanan = " . (int)$id_pesanan);
 
 function badgeClass($status) {
     switch ($status) {
@@ -71,6 +71,7 @@ function badgeClass($status) {
                             <thead class="table-light">
                                 <tr>
                                     <th>Menu</th>
+                                    <th>Deskripsi</th>
                                     <th class="text-center">Jumlah</th>
                                     <th class="text-end">Harga</th>
                                     <th class="text-end">Subtotal</th>
@@ -80,6 +81,11 @@ function badgeClass($status) {
                                 <?php $total = 0; while($row = mysqli_fetch_assoc($items)): $total += (float)$row['subtotal']; ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($row['nama_menu']); ?></td>
+                                    <td>
+                                        <small class="text-muted">
+                                            <?php echo htmlspecialchars($row['deskripsi'] ?: 'Tidak ada deskripsi'); ?>
+                                        </small>
+                                    </td>
                                     <td class="text-center"><?php echo (int)$row['jumlah']; ?></td>
                                     <td class="text-end">Rp <?php echo number_format((float)$row['harga'], 0, ',', '.'); ?></td>
                                     <td class="text-end">Rp <?php echo number_format((float)$row['subtotal'], 0, ',', '.'); ?></td>
@@ -88,7 +94,7 @@ function badgeClass($status) {
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <th colspan="3" class="text-end">Total</th>
+                                    <th colspan="4" class="text-end">Total</th>
                                     <th class="text-end">Rp <?php echo number_format((float)$order['total_harga'], 0, ',', '.'); ?></th>
                                 </tr>
                             </tfoot>

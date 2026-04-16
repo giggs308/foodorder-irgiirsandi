@@ -43,27 +43,10 @@ if (!function_exists('make_slug')) {
 }
 
 // Ambil data menu dari database
-$query = mysqli_query($conn, "SELECT * FROM menu");
+$query = mysqli_query($conn, "SELECT id_menu, nama_menu, deskripsi, harga, gambar FROM menu ORDER BY nama_menu ASC");
 
-// Ambil daftar kategori unik dengan pengecekan kolom 'kategori'
-$categories = [];
-$hasKategoriCol = false;
-$checkKategori = mysqli_query($conn, "SHOW COLUMNS FROM menu LIKE 'kategori'");
-if ($checkKategori && mysqli_num_rows($checkKategori) > 0) {
-    $hasKategoriCol = true;
-}
-
-if ($hasKategoriCol) {
-    $category_result = mysqli_query($conn, "SELECT DISTINCT kategori FROM menu ORDER BY kategori ASC");
-    if ($category_result) {
-        while ($category_row = mysqli_fetch_assoc($category_result)) {
-            $categories[] = $category_row['kategori'] ?? 'Lainnya';
-        }
-    }
-} else {
-    // Fallback jika kolom kategori tidak ada di database
-    $categories = ['Makanan', 'Minuman', 'Snack', 'Paket'];
-}
+// Default categories since kategori column doesn't exist
+$categories = ['Makanan', 'Minuman', 'Dessert', 'Paket'];
 ?>
 
 <!DOCTYPE html>
@@ -170,14 +153,113 @@ if ($hasKategoriCol) {
 
         /* Cart Section */
         .cart-section {
-            flex: 1.2;
+            position: fixed;
+            top: 80px;
+            right: -400px; /* Initially hidden off-screen */
+            width: 380px;
+            max-width: 90vw;
             background-color: white;
             border-radius: 15px;
             box-shadow: 0 3px 10px rgba(0,0,0,0.1);
             padding: 20px;
-            height: fit-content;
-            position: sticky;
-            top: 90px;
+            height: calc(100vh - 100px);
+            z-index: 1000;
+            transition: right 0.3s ease;
+            display: none; /* Initially hidden */
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .cart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ff6b35;
+            margin-bottom: 15px;
+            flex-shrink: 0;
+        }
+
+        .cart-title {
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cart-close {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .cart-message {
+            margin-bottom: 15px;
+            flex-shrink: 0;
+        }
+
+        .cart-items {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 10px;
+            min-height: 0;
+        }
+
+        .cart-summary {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            flex-shrink: 0;
+        }
+
+        .cart-section.show {
+            right: 20px; /* Show on screen */
+            display: flex;
+        }
+
+        /* Floating cart toggle button */
+        .cart-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #ff6b35;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .cart-toggle:hover {
+            transform: scale(1.1);
+            background: #e65a2b;
+        }
+
+        .cart-toggle .cart-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
         }
 
         .cart-section h5 {
@@ -229,8 +311,30 @@ if ($hasKategoriCol) {
             }
 
             .cart-section {
-                position: relative;
                 top: 0;
+                right: -100%;
+                width: 80%;
+                max-width: 400px;
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            .cart-section.show {
+                right: 0;
+                display: flex;
+            }
+
+            .cart-toggle {
+                bottom: 20px;
+                right: 20px;
+                z-index: 1002;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .cart-section {
+                width: 90%;
+                max-width: none;
             }
         }
     </style>
@@ -258,6 +362,12 @@ if ($hasKategoriCol) {
         <a href="../logout.php" class="btn btn-sm btn-dark">Logout</a>
     </div>
 </nav>
+
+<!-- Floating Cart Toggle Button -->
+<button class="cart-toggle" id="cartToggle" style="display: <?= (isset($_SESSION['cart']) && !empty($_SESSION['cart'])) ? 'flex' : 'none'; ?>;">
+    <i class="fas fa-shopping-cart fa-lg"></i>
+    <span class="cart-badge" id="cartToggleBadge"><?= isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0 ?></span>
+</button>
 
 <style>
 /* Menu Section Styles */
@@ -571,7 +681,7 @@ if ($hasKategoriCol) {
                     }
                 }
             ?>
-                <?php $category_slug = make_slug($row['kategori'] ?? 'Lainnya'); ?>
+                <?php $category_slug = 'makanan'; // Default category since kategori column doesn't exist ?>
                 <div class="menu-card" data-category="<?= htmlspecialchars($category_slug) ?>">
                     <div class="menu-badge">
                         <span class="badge bg-success">Tersedia</span>
@@ -601,16 +711,22 @@ if ($hasKategoriCol) {
             <?php endwhile; ?>
         </div>
 
-    <!-- Cart Section -->
-    <div class="cart-section" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-top: 20px;">
-        <h5 class="mb-3" style="font-weight: 600; color: #333; border-bottom: 2px solid #ff6b35; padding-bottom: 10px; display: flex; align-items: center;">
-            <i class="fas fa-shopping-cart me-2" style="color: #ff6b35;"></i> Pesanan Saya
-            <span class="badge bg-danger ms-2" id="cart-count">
-                <?= isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0 ?>
-            </span>
-        </h5>
-        <div id="cart-message" class="mb-3"></div>
-        <div id="cart-items" style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
+    </div>
+</div>    <!-- Cart Section - Outside main container for right positioning -->
+    <div class="cart-section <?php echo (isset($_SESSION['cart']) && !empty($_SESSION['cart'])) ? 'show' : ''; ?>" id="cartSection">
+        <div class="cart-header">
+            <div class="cart-title">
+                <i class="fas fa-shopping-cart"></i> Pesanan Saya
+                <span class="badge bg-danger" id="cart-count">
+                    <?= isset($_SESSION['cart']) ? count($_SESSION['cart']) : 0 ?>
+                </span>
+            </div>
+            <button type="button" id="closeCart" class="cart-close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="cart-message" class="cart-message"></div>
+        <div id="cart-items" class="cart-items">
             <?php
             $subtotal = 0;
             if (isset($_SESSION['cart']) && !empty($_SESSION['cart'])) {
@@ -701,24 +817,6 @@ if ($hasKategoriCol) {
                     <?php
                 }
                 ?>
-                <div class="cart-summary mt-4 p-3" style="background: #f8f9fa; border-radius: 10px;">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Subtotal:</span>
-                        <strong class="subtotal-amount">Rp <?= number_format($subtotal, 0, ',', '.') ?></strong>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Ongkir:</span>
-                        <strong>Rp 0</strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
-                        <span class="fw-bold">Total:</span>
-                        <h5 class="mb-0 text-primary total-amount">Rp <?= number_format($subtotal, 0, ',', '.') ?></h5>
-                    </div>
-                    <a href="checkout.php" class="btn btn-primary w-100 mt-3 py-2 fw-bold" 
-                       style="border-radius: 8px; font-size: 1rem;">
-                        <i class="fas fa-credit-card me-2"></i>Lanjut ke Pembayaran
-                    </a>
-                </div>
                 <?php
             } else {
                 echo '<div class="text-center py-4">
@@ -731,6 +829,27 @@ if ($hasKategoriCol) {
             }
             ?>
         </div>
+
+        <?php if (isset($_SESSION['cart']) && !empty($_SESSION['cart'])): ?>
+        <div class="cart-summary">
+            <div class="d-flex justify-content-between mb-2">
+                <span>Subtotal:</span>
+                <strong class="subtotal-amount">Rp <?= number_format($subtotal, 0, ',', '.') ?></strong>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+                <span>Ongkir:</span>
+                <strong>Rp 0</strong>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                <span class="fw-bold">Total:</span>
+                <h5 class="mb-0 text-primary total-amount">Rp <?= number_format($subtotal, 0, ',', '.') ?></h5>
+            </div>
+            <a href="checkout.php" class="btn btn-primary w-100 mt-3 py-2 fw-bold" 
+               style="border-radius: 8px; font-size: 1rem;">
+                <i class="fas fa-credit-card me-2"></i>Lanjut ke Pembayaran
+            </a>
+        </div>
+        <?php endif; ?>
     </div>
 
 </div>
@@ -742,7 +861,38 @@ if ($hasKategoriCol) {
         const $menuCards = $('.menu-card');
         const $categoryButtons = $('.category-btn');
         const $searchInput = $('#search-menu');
+        const $cartSection = $('#cartSection');
+        const $cartToggle = $('#cartToggle');
+        const $cartToggleBadge = $('#cartToggleBadge');
         let activeCategory = 'all';
+
+        // Check if cart has items and show/hide accordingly
+        function updateCartVisibility() {
+            const cartItemCount = $('.cart-item').length;
+            const hasItems = cartItemCount > 0;
+            
+            if (hasItems) {
+                $cartSection.addClass('show');
+                $cartToggle.show();
+                $cartToggleBadge.text(cartItemCount);
+            } else {
+                $cartSection.removeClass('show');
+                $cartToggle.hide();
+            }
+        }
+
+        // Cart toggle functionality
+        $cartToggle.on('click', function() {
+            $cartSection.toggleClass('show');
+        });
+
+        // Close cart functionality
+        $('#closeCart').on('click', function() {
+            $cartSection.removeClass('show');
+        });
+
+        // Initialize cart visibility on page load
+        updateCartVisibility();
 
         function normalizeText(text) {
             return (text || '').toString().toLowerCase();
@@ -802,8 +952,42 @@ if ($hasKategoriCol) {
         function updateCartCount() {
             const count = $('.cart-item').length;
             $('#cart-count').text(count);
+            updateCartVisibility();
             return count;
         }
+
+        // Handle add to cart form submission
+        $(document).on('submit', '.add-to-cart-form', function(e) {
+            e.preventDefault();
+            
+            const $form = $(this);
+            const $button = $form.find('.btn-add-to-cart');
+            const originalText = $button.html();
+            
+            // Show loading
+            $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+            
+            $.ajax({
+                url: $form.attr('action'),
+                method: 'POST',
+                data: $form.serialize(),
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        showAlert('success', response.message);
+                        location.reload();
+                    } else {
+                        showAlert('danger', response.message);
+                    }
+                },
+                error: function() {
+                    showAlert('danger', 'Terjadi kesalahan. Silakan coba lagi.');
+                },
+                complete: function() {
+                    $button.prop('disabled', false).html(originalText);
+                }
+            });
+        });
 
         // Handle remove item
         $(document).on('click', '.remove-item', function(e) {

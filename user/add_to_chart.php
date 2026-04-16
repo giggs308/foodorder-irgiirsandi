@@ -3,7 +3,11 @@ session_start();
 require_once '../includes/config.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_POST['id_menu'])) {
-    header('Location: index.php');
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'message' => 'Invalid request.'
+    ]);
     exit();
 }
 
@@ -19,8 +23,11 @@ $result = mysqli_stmt_get_result($stmt);
 $menu = mysqli_fetch_assoc($result);
 
 if (!$menu) {
-    $_SESSION['error'] = 'Menu tidak ditemukan.';
-    header('Location: index.php');
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'message' => 'Menu tidak ditemukan.'
+    ]);
     exit();
 }
 
@@ -42,6 +49,10 @@ if (isset($_SESSION['cart'][$id_menu])) {
     ];
 }
 
-$_SESSION['message'] = 'Menu berhasil ditambahkan ke keranjang.';
-header('Location: index.php');
+// Return JSON response for AJAX
+header('Content-Type: application/json');
+echo json_encode([
+    'success' => true,
+    'message' => 'Menu berhasil ditambahkan ke keranjang.'
+]);
 exit();
